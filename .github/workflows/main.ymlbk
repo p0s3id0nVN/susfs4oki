@@ -1,0 +1,50 @@
+name: Sync All Branches from Upstream
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch: 
+
+# Cấp quyền ở mức cao nhất của file
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  sync-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Config Git Identity
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git config --global push.autoSetupRemote true
+      - name: Add Upstream and Fetch
+        run: |
+          git remote add upstream https://github.com/cctv18/susfs4oki.git
+          git fetch upstream --prune --tags
+      - name: Sync All Branches
+        run: |
+          # Lấy danh sách nhánh, loại bỏ HEAD
+          branches=$(git branch -r | grep 'upstream/' | grep -v 'upstream/HEAD' | sed 's/.*upstream\///')
+          for branch in $branches; do
+            echo "::group::Syncing branch: $branch"
+            
+            # Reset nhánh local về trạng thái của upstream
+            git checkout -B "$branch" upstream/"$branch"
+            
+            # Push lên bản fork (origin) với tham số --force
+            git push origin "$branch" --force
+            
+            echo "::endgroup::"
+          done
+      - name: Sync All Tags
+        run: |
+          echo "Syncing all tags..."
+          git push origin --tags --force
