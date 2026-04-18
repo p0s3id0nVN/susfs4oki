@@ -1,0 +1,70 @@
+name: 🔄 Sync SusFS Upstream
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # Chạy tự động mỗi 2 giờ (0h, 2h, 4h...)
+  workflow_dispatch:      # Cho phép bạn bấm chạy thủ công bất cứ lúc nào
+
+jobs:
+  sync_latest_from_upstream:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Quyền bắt buộc để push code về fork của bạn
+    
+    steps:
+      - name: 📥 Checkout Fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Lấy toàn bộ lịch sử để merge không lỗi
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ⚙️ Cấu hình Git
+        run: |
+          git config --global user.name "Phuc-Dev-Bot"
+          git config --global user.email "phucdevlo@users.noreply.github.com"
+
+      - name: 🔄 Thực hiện Đồng bộ
+        run: |
+          # 1. Thêm repo gốc làm upstream
+          UPSTREAM_URL="https://github.com/cctv18/susfs4oki.git"
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch upstream
+
+          # 2. Lấy danh sách các nhánh từ upstream
+          # Loại bỏ HEAD và chỉ lấy tên nhánh
+          branches=$(git branch -r | grep 'upstream/' | grep -v 'HEAD' | sed 's/upstream\///')
+
+          for branch in $branches; do
+            echo "::group::Đang đồng bộ nhánh: $branch"
+            
+            # Kiểm tra và checkout nhánh
+            if git rev-parse --verify "$branch" >/dev/null 2>&1; then
+              git checkout "$branch"
+            else
+              git checkout -b "$branch" "upstream/$branch"
+            fi
+
+            # 3. Merge upstream nhưng chưa commit để xử lý file Action
+            # --no-commit giúp chúng ta can thiệp vào file trước khi hoàn tất merge
+            git merge upstream/"$branch" --no-commit --no-ff || echo "Có xung đột nhỏ, đang xử lý bảo vệ Action..."
+
+            # 4. KHÔI PHỤC thư mục Action của bạn (Giữ lại hàng chính chủ)
+            if [ -d ".github/workflows" ]; then
+              git checkout HEAD -- .github/workflows
+              echo "✅ Đã giữ lại các tệp Action local của bạn."
+            fi
+            
+            # 5. Hoàn tất commit và push
+            if git commit -m "🔄 Sync $branch from upstream (Action protected)"; then
+              git push origin "$branch"
+              echo "🚀 Đã cập nhật nhánh $branch thành công."
+            else
+              echo "ℹ️ Nhánh $branch đã trùng khớp với upstream, không có gì để update."
+            fi
+            
+            echo "::endgroup::"
+          done
+
+      - name: 📢 Thông báo kết quả (Tùy chọn)
+        if: failure()
+        run: echo "❌ Quá trình đồng bộ gặp lỗi nghiêm trọng. Kiểm tra lại Conflict!"
