@@ -2,9 +2,11 @@
 #define FEATURES_H
 
 #include "features/sus_path.h"
+#include "features/sus_path_uid_filter.h"
 #include "features/sus_kstat.h"
 #include "features/sus_mount.h"
 #include "features/sus_map.h"
+#include "features/priority_uid_filter.h"
 #include "features/spoof_cmdline_or_bootconfig.h"
 #include "features/spoof_uname.h"
 #include "features/avc_log_spoofing.h"
